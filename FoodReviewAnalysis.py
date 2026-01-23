@@ -42,73 +42,64 @@ emoji_map = {
 st.title("🍔 Restaurant Review Sentiment Dashboard")
 st.write("Analyze sentiment and emotion of reviews, and compare with rating.")
 
-# ---------------------------
-# 2a️⃣ Single Review Input
-# ---------------------------
+# --- Single Review Analysis ---
 st.subheader("Single Review Analysis")
-
 user_review = st.text_area("Enter your review:")
 
-# Star rating input using slider
-user_rating = st.slider("Select rating (⭐):", 1, 5, 5, 1)
+# Star rating input (horizontal stars)
+user_rating = st.radio(
+    "Rate the restaurant:",
+    options=[1, 2, 3, 4, 5],
+    format_func=lambda x: "⭐" * x,
+    horizontal=True
+)
 
 if st.button("Analyze Review"):
-    if user_review.strip():
-        # --- Sentiment ---
+    if user_review.strip() != "":
+        # --- Sentiment prediction ---
         sentiment_result = sentiment_pipeline(user_review)[0]
         sentiment_label = label_map.get(sentiment_result['label'], sentiment_result['label'])
         sentiment_score = sentiment_result['score']
 
-        # --- Emotion ---
+        # --- Emotion prediction ---
         emotion_results = emotion_pipeline(user_review)[0]
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
 
-        # --- Rating → Sentiment mapping ---
-        def rating_to_sentiment(r):
-            if r >= 4:
+        # --- Map rating to sentiment ---
+        def rating_to_sentiment(rating):
+            if rating >= 4:
                 return "positive"
-            elif r == 3:
+            elif rating == 3:
                 return "neutral"
             else:
                 return "negative"
 
         rating_sentiment = rating_to_sentiment(user_rating)
 
-        # --- Display Sentiment ---
+        # --- Display results ---
         st.subheader("Sentiment Analysis")
-        st.write(f"**Predicted Sentiment:** {sentiment_label} (Confidence: {sentiment_score:.2f})")
-        st.write(f"**Rating Sentiment:** {rating_sentiment} (⭐ {user_rating})")
+        st.write(f"**Sentiment:** {sentiment_label}")
+        st.write(f"**Confidence:** {sentiment_score:.2f}")
+        st.write(f"**Rating Sentiment:** {rating_sentiment}")
 
-        # --- Emotion Chart ---
-        df_emotion = pd.DataFrame({
-            "Emotion": [f"{emoji_map.get(k, '')} {k.capitalize()}" for k in emotion_dict.keys()],
-            "Score": list(emotion_dict.values())
-        })
-        fig = px.bar(
-            df_emotion,
-            x="Emotion",
-            y="Score",
-            text="Score",
-            color="Score",
-            color_continuous_scale="viridis"
-        )
-        fig.update_traces(texttemplate='%{text:.2f}', textposition='outside')
         st.subheader("Emotion Analysis")
-        st.plotly_chart(fig)
+        for emotion, score in emotion_dict.items():
+            st.write(f"{emotion.capitalize()}: {score:.2f}")
 
-        # --- Mismatch Check ---
+        # --- Compare sentiment and rating ---
         st.subheader("Sentiment vs Rating Check")
         if sentiment_label != rating_sentiment:
             st.warning("⚠️ Mismatch detected!")
             st.dataframe(pd.DataFrame([{
                 "Review": user_review,
-                "Rating": user_rating,
+                "Rating": "⭐" * user_rating,
                 "Rating Sentiment": rating_sentiment,
                 "Predicted Sentiment": sentiment_label,
-                "Sentiment Confidence": sentiment_score
+                "Confidence": sentiment_score
             }]))
         else:
             st.success("✅ No mismatch detected.")
+
 
 # ---------------------------
 # 2b️⃣ Batch CSV Upload

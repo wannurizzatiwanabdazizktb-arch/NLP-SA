@@ -19,7 +19,7 @@ emotion_pipeline = pipeline(
     "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
     return_all_scores=True,
-    device=0
+    device=-1
 )
 
 # ---------------------------

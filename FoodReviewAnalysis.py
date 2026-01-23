@@ -83,12 +83,24 @@ if st.button("Analyze Review"):
 
 # --- CSV upload ---
 st.subheader("Batch Review Analysis (CSV)")
-uploaded_file = st.file_uploader("Upload CSV file with 'review' and 'rating' columns", type=["csv"])
+uploaded_file = st.file_uploader(
+    "Upload CSV file with 'review' and 'rating' columns", type=["csv"]
+)
+
 if uploaded_file is not None:
     try:
+        # Try UTF-8 first
         df = pd.read_csv(uploaded_file, encoding='utf-8')
     except UnicodeDecodeError:
-        df = pd.read_csv(uploaded_file, encoding='latin1')  # fallback
+        try:
+            # Fallback to latin1
+            df = pd.read_csv(uploaded_file, encoding='latin1')
+        except Exception as e:
+            st.error(f"Failed to read CSV: {e}")
+            st.stop()
+
+    st.success(f"CSV loaded successfully with {len(df)} rows.")
+    st.dataframe(df.head())
 
     # Map rating to sentiment
     df['rating_sentiment'] = df['rating'].apply(lambda x: "positive" if x >= 4 else ("neutral" if x == 3 else "negative"))

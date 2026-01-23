@@ -85,7 +85,10 @@ if st.button("Analyze Review"):
 st.subheader("Batch Review Analysis (CSV)")
 uploaded_file = st.file_uploader("Upload CSV file with 'review' and 'rating' columns", type=["csv"])
 if uploaded_file is not None:
-    df = pd.read_csv(uploaded_file)
+    try:
+        df = pd.read_csv(uploaded_file, encoding='utf-8')
+    except UnicodeDecodeError:
+        df = pd.read_csv(uploaded_file, encoding='latin1')  # fallback
 
     # Map rating to sentiment
     df['rating_sentiment'] = df['rating'].apply(lambda x: "positive" if x >= 4 else ("neutral" if x == 3 else "negative"))

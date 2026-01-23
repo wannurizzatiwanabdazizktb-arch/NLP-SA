@@ -83,28 +83,27 @@ if st.button("Analyze Review"):
         st.write(f"**Rating Sentiment:** {rating_sentiment}")
 
         # --- Emotion Pie Chart ---
-        st.subheader("Emotion Analysis (Pie Chart)")
+        st.subheader("Emotion Analysis (Bar Chart)")
 
-        # Create DataFrame for Plotly
         df_emotion = pd.DataFrame({
             "Emotion": [f"{emoji_map.get(k, '')} {k.capitalize()}" for k in emotion_dict.keys()],
             "Score": list(emotion_dict.values())
         })
         
-        # Normalize to percentage
-        df_emotion['Percentage'] = df_emotion['Score'] / df_emotion['Score'].sum() * 100
+        df_emotion = df_emotion.sort_values("Score", ascending=True)  # sort for horizontal bar
         
-        # Plot pie chart
-        fig = px.pie(
+        fig = px.bar(
             df_emotion,
-            names="Emotion",
-            values="Percentage",
-            hole=0.3,  # optional donut chart
+            x="Score",
+            y="Emotion",
+            orientation="h",
+            text="Score",
+            title="Emotion Scores"
         )
         
-        fig.update_traces(textinfo='label+percent', textfont_size=16)
-        
+        fig.update_layout(xaxis_title="Confidence", yaxis_title="", xaxis_tickformat=".2f")
         st.plotly_chart(fig)
+
 
 
         # --- Compare sentiment and rating ---

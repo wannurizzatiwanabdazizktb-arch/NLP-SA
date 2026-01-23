@@ -5,6 +5,7 @@ import pandas as pd
 from transformers import pipeline
 from stqdm import stqdm
 import torch
+st.write(torch.cuda.is_available())  # must return True
 
 # ---------------------------
 # 1️⃣ Initialize pipelines

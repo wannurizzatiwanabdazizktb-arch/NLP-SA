@@ -34,9 +34,8 @@ emotion_pipeline = pipeline(
 # ---------------------------
 
 st.title("🍽️ Restaurant Review Analyzer")
-st.write("Analyze sentiment and emotion of reviews and compare with rating.")
-st.write(torch.cuda.is_available())  # must return True
-st.write("success")  # must return True
+st.write("Analyze sentiment and emotion of reviews and compare with rating. Success")
+# st.write(torch.cuda.is_available())  # must return True
 
 # --- Single Review Input ---
 st.subheader("Single Review Analysis")

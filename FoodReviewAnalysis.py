@@ -5,6 +5,16 @@ import pandas as pd
 from transformers import pipeline
 from stqdm import stqdm
 import plotly.express as px
+import os
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+os.environ["TORCH_DISABLE_SDPA"] = "1"
+
+import torch
+
+torch.set_default_device("cpu")
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_math_sdp(False)
 
 # ---------------------------
 # 1️⃣ Pipelines
@@ -13,7 +23,9 @@ import plotly.express as px
 sentiment_pipeline = pipeline(
     "sentiment-analysis",
     model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-    device=-1
+    device=-1,
+    truncation=True,
+    max_length=512
 )
 label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
@@ -22,7 +34,9 @@ emotion_pipeline = pipeline(
     "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
     return_all_scores=True,
-    device=-1
+    device=-1,
+    truncation=True,
+    max_length=512
 )
 
 # Emoji mapping for chart
@@ -170,8 +184,17 @@ if uploaded_file is not None:
 
         # Process reviews with progress bar
         for review in stqdm(reviews, desc="Processing reviews"):
+        # Safety check (CRITICAL)
+        if not isinstance(review, str) or review.strip() == "":
+            all_results.append({"label": "NEU", "score": 0.0})
+            continue
+    
+        try:
             result = sentiment_pipeline(review)[0]
             all_results.append(result)
+        except Exception:
+            # fallback if model still fails
+            all_results.append({"label": "NEU", "score": 0.0})
 
         df['predicted_sentiment'] = [label_map.get(r['label'], r['label']) for r in all_results]
         df['sentiment_confidence'] = [r['score'] for r in all_results]

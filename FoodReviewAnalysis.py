@@ -5,7 +5,6 @@ import pandas as pd
 from transformers import pipeline
 from stqdm import stqdm
 import torch
-st.write(torch.cuda.is_available())  # must return True
 
 # ---------------------------
 # 1️⃣ Initialize pipelines
@@ -36,6 +35,8 @@ emotion_pipeline = pipeline(
 
 st.title("🍽️ Restaurant Review Analyzer")
 st.write("Analyze sentiment and emotion of reviews and compare with rating.")
+st.write(torch.cuda.is_available())  # must return True
+st.write("success")  # must return True
 
 # --- Single Review Input ---
 st.subheader("Single Review Analysis")

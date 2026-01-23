@@ -1,20 +1,16 @@
 # streamlit_sentiment_dashboard.py
 
+import os
+# 🔥 CRITICAL FIX FOR STREAMLIT CLOUD
+os.environ["TORCH_DISABLE_SDPA"] = "1"
+os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+
 import streamlit as st
 import pandas as pd
 from transformers import pipeline
 from stqdm import stqdm
 import plotly.express as px
-import os
-os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["TORCH_DISABLE_SDPA"] = "1"
-
 import torch
-
-torch.set_default_device("cpu")
-torch.backends.cuda.enable_flash_sdp(False)
-torch.backends.cuda.enable_mem_efficient_sdp(False)
-torch.backends.cuda.enable_math_sdp(False)
 
 # ---------------------------
 # 1️⃣ Pipelines

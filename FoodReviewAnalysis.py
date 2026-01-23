@@ -85,25 +85,31 @@ if st.button("Analyze Review"):
         # --- Emotion Pie Chart ---
         st.subheader("Emotion Analysis (Bar Chart)")
 
+        # Prepare DataFrame
         df_emotion = pd.DataFrame({
             "Emotion": [f"{emoji_map.get(k, '')} {k.capitalize()}" for k in emotion_dict.keys()],
-            "Score": list(emotion_dict.values())
+            "Score": [round(v*100, 2) for v in emotion_dict.values()]  # convert to percentage
         })
         
-        df_emotion = df_emotion.sort_values("Score", ascending=True)  # sort for horizontal bar
+        # Sort for better visual
+        df_emotion = df_emotion.sort_values("Score", ascending=True)
         
+        # Plot colorful horizontal bar chart
         fig = px.bar(
             df_emotion,
             x="Score",
             y="Emotion",
             orientation="h",
             text="Score",
-            title="Emotion Scores"
+            color="Score",
+            color_continuous_scale="Viridis",  # you can use other scales like "Rainbow", "Plasma"
+            title="Emotion Confidence (%)"
         )
         
-        fig.update_layout(xaxis_title="Confidence", yaxis_title="", xaxis_tickformat=".2f")
+        fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+        fig.update_layout(xaxis_title="Confidence (%)", yaxis_title="", xaxis_range=[0, 100])
+        
         st.plotly_chart(fig)
-
 
 
         # --- Compare sentiment and rating ---

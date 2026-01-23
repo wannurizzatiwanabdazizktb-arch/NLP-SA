@@ -11,7 +11,7 @@ from transformers import pipeline
 sentiment_pipeline = pipeline(
     "sentiment-analysis",
     model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-    device=0  # set -1 if CPU
+    device=-1  # set -1 if CPU
 )
 
 # Emotion detection (e.g., anger, joy, sadness)

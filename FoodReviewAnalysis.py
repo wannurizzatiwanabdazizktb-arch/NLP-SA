@@ -82,9 +82,32 @@ if st.button("Analyze Review"):
         st.write(f"**Confidence:** {sentiment_score:.2f}")
         st.write(f"**Rating Sentiment:** {rating_sentiment}")
 
-        st.subheader("Emotion Analysis")
-        for emotion, score in emotion_dict.items():
-            st.write(f"{emotion.capitalize()}: {score:.2f}")
+        # --- Emotion Pie Chart ---
+        st.subheader("Emotion Analysis (Pie Chart)")
+        
+        # Convert emotion results to DataFrame
+        df_emotion = pd.DataFrame({
+            "Emotion": [f"{emoji_map.get(k, '')} {k.capitalize()}" for k in emotion_dict.keys()],
+            "Score": list(emotion_dict.values())
+        })
+        
+        # Normalize scores to sum to 100%
+        df_emotion['Percentage'] = df_emotion['Score'] / df_emotion['Score'].sum() * 100
+        
+        # Plot pie chart
+        fig = px.pie(
+            df_emotion,
+            names="Emotion",
+            values="Percentage",
+            color="Percentage",
+            color_continuous_scale="Viridis",
+            hole=0.3,  # optional: makes it a donut chart
+        )
+        
+        fig.update_traces(textinfo='label+percent', textfont_size=16)
+        
+        st.plotly_chart(fig)
+
 
         # --- Compare sentiment and rating ---
         st.subheader("Sentiment vs Rating Check")

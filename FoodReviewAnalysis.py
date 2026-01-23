@@ -89,43 +89,63 @@ uploaded_file = st.file_uploader(
 
 if uploaded_file is not None:
     try:
-        # Try UTF-8 first
-        df = pd.read_csv(uploaded_file, encoding='utf-8')
+        df = pd.read_csv(uploaded_file, encoding="utf-8")
     except UnicodeDecodeError:
-        try:
-            # Fallback to latin1
-            df = pd.read_csv(uploaded_file, encoding='latin1')
-        except Exception as e:
-            st.error(f"Failed to read CSV: {e}")
-            st.stop()
+        df = pd.read_csv(uploaded_file, encoding="latin1")
 
     st.success(f"CSV loaded successfully with {len(df)} rows.")
     st.dataframe(df.head())
 
+    # ---------------------------
+    # ✅ FIX 1: Clean rating column
+    # ---------------------------
     df['rating'] = (
         df['rating']
         .astype(str)
-        .str.extract(r'(\d)')   # extract 1–5
+        .str.extract(r'(\d)')   # extract 1–5 from "5 stars"
         .astype(float)
     )
 
-    # Map rating to sentiment
-    df['rating_sentiment'] = df['rating'].apply(lambda x: "positive" if x >= 4 else ("neutral" if x == 3 else "negative"))
+    # ---------------------------
+    # ✅ FIX 2: Safe rating → sentiment mapping
+    # ---------------------------
+    def rating_to_sentiment(x):
+        if pd.isna(x):
+            return None
+        if x >= 4:
+            return "positive"
+        elif x == 3:
+            return "neutral"
+        else:
+            return "negative"
 
-    # Predict sentiment for dataset
+    df['rating_sentiment'] = df['rating'].apply(rating_to_sentiment)
+
+    # ---------------------------
+    # Predict sentiment
+    # ---------------------------
     if st.button("Analyze CSV Reviews"):
-        reviews = df['review'].tolist()
+        reviews = df['review'].astype(str).tolist()
         all_results = []
+
         for review in stqdm(reviews, desc="Processing reviews"):
             result = sentiment_pipeline(review)[0]
             all_results.append(result)
 
-        df['predicted_sentiment'] = [label_map[r['label']] for r in all_results]
+        df['predicted_sentiment'] = [
+            label_map.get(r['label'], r['label']) for r in all_results
+        ]
 
+        # ---------------------------
         # Find mismatches
+        # ---------------------------
         mismatches = df[df['predicted_sentiment'] != df['rating_sentiment']]
+
         if len(mismatches) > 0:
             st.warning(f"⚠️ Found {len(mismatches)} mismatched reviews")
-            st.dataframe(mismatches[['review', 'rating', 'rating_sentiment', 'predicted_sentiment']])
+            st.dataframe(
+                mismatches[['review', 'rating', 'rating_sentiment', 'predicted_sentiment']]
+            )
         else:
             st.success("✅ No mismatches found in the dataset!")
+

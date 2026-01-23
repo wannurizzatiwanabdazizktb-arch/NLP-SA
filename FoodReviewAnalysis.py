@@ -5,12 +5,6 @@ import pandas as pd
 from transformers import pipeline
 
 # ---------------------------
-# 1️⃣ Load dataset (optional)
-# ---------------------------
-# Assume df has 'review' and 'rating' columns
-df = pd.read_csv("McDonald_s_Reviews.csv")  # adjust path
-
-# ---------------------------
 # 2️⃣ Initialize pipelines
 # ---------------------------
 # Sentiment (3-class)

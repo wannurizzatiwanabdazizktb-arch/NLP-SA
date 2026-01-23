@@ -102,6 +102,13 @@ if uploaded_file is not None:
     st.success(f"CSV loaded successfully with {len(df)} rows.")
     st.dataframe(df.head())
 
+    df['rating'] = (
+        df['rating']
+        .astype(str)
+        .str.extract(r'(\d)')   # extract 1–5
+        .astype(float)
+    )
+
     # Map rating to sentiment
     df['rating_sentiment'] = df['rating'].apply(lambda x: "positive" if x >= 4 else ("neutral" if x == 3 else "negative"))
 

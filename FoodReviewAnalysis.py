@@ -37,23 +37,30 @@ st.title("🍽️ Restaurant Review Analyzer")
 st.write("Analyze sentiment and emotion of reviews and compare with rating. Success")
 # st.write(torch.cuda.is_available())  # must return True
 
-# --- Single Review Input ---
+# --- Single Review Analysis ---
 st.subheader("Single Review Analysis")
 user_review = st.text_area("Enter your review:")
-user_rating = st.number_input("Enter rating (1-5):", min_value=1, max_value=5, value=5, step=1)
+
+# Star rating input (horizontal stars)
+user_rating = st.radio(
+    "Rate the restaurant:",
+    options=[1, 2, 3, 4, 5],
+    format_func=lambda x: "⭐" * x,
+    horizontal=True
+)
 
 if st.button("Analyze Review"):
     if user_review.strip() != "":
-        # Sentiment
+        # --- Sentiment prediction ---
         sentiment_result = sentiment_pipeline(user_review)[0]
         sentiment_label = label_map.get(sentiment_result['label'], sentiment_result['label'])
-        sentiment_conf = sentiment_result['score']
+        sentiment_score = sentiment_result['score']
 
-        # Emotion
+        # --- Emotion prediction ---
         emotion_results = emotion_pipeline(user_review)[0]
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
 
-        # Rating → sentiment
+        # --- Map rating to sentiment ---
         def rating_to_sentiment(rating):
             if rating >= 4:
                 return "positive"
@@ -61,31 +68,32 @@ if st.button("Analyze Review"):
                 return "neutral"
             else:
                 return "negative"
+
         rating_sentiment = rating_to_sentiment(user_rating)
 
-        # Display
+        # --- Display results ---
         st.subheader("Sentiment Analysis")
-        st.write(f"**Predicted Sentiment:** {sentiment_label}")
-        st.write(f"**Confidence:** {sentiment_conf:.2f}")
+        st.write(f"**Sentiment:** {sentiment_label}")
+        st.write(f"**Confidence:** {sentiment_score:.2f}")
         st.write(f"**Rating Sentiment:** {rating_sentiment}")
 
         st.subheader("Emotion Analysis")
         for emotion, score in emotion_dict.items():
             st.write(f"{emotion.capitalize()}: {score:.2f}")
 
-        st.subheader("Rating vs Sentiment Check")
+        # --- Compare sentiment and rating ---
+        st.subheader("Sentiment vs Rating Check")
         if sentiment_label != rating_sentiment:
             st.warning("⚠️ Mismatch detected!")
             st.dataframe(pd.DataFrame([{
                 "Review": user_review,
-                "Rating": user_rating,
+                "Rating": "⭐" * user_rating,
                 "Rating Sentiment": rating_sentiment,
                 "Predicted Sentiment": sentiment_label,
-                "Sentiment Confidence": sentiment_conf,
-                **{f"Emotion {k}": v for k, v in emotion_dict.items()}
+                "Confidence": sentiment_score
             }]))
         else:
-            st.success("✅ Rating matches sentiment.")
+            st.success("✅ No mismatch detected.")
 
 # --- CSV Upload ---
 st.subheader("Batch Review Analysis (CSV Upload)")

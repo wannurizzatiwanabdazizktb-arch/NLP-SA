@@ -184,17 +184,9 @@ if uploaded_file is not None:
 
         # Process reviews with progress bar
         for review in stqdm(reviews, desc="Processing reviews"):
-            # Safety check (CRITICAL)
-            if not isinstance(review, str) or review.strip() == "":
-                all_results.append({"label": "NEU", "score": 0.0})
-                continue
-        
-            try:
-                result = sentiment_pipeline(review)[0]
-                all_results.append(result)
-            except Exception:
-                # fallback if model still fails
-                all_results.append({"label": "NEU", "score": 0.0})
+            result = sentiment_pipeline(review)[0]
+            all_results.append(result)
+
 
         df['predicted_sentiment'] = [label_map.get(r['label'], r['label']) for r in all_results]
         df['sentiment_confidence'] = [r['score'] for r in all_results]

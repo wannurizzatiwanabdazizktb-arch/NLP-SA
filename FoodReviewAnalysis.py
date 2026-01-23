@@ -4,24 +4,28 @@ import streamlit as st
 import pandas as pd
 from transformers import pipeline
 from stqdm import stqdm  # optional for progress bar in Streamlit
+import torch
+torch.backends.cuda.enable_flash_sdp(False)
+torch.backends.cuda.enable_mem_efficient_sdp(False)
+torch.backends.cuda.enable_math_sdp(True)
+
 
 # ---------------------------
 # 1️⃣ Pipelines
 # ---------------------------
-# Sentiment
 sentiment_pipeline = pipeline(
     "sentiment-analysis",
     model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-    device=-1  # CPU
+    device=-1,                 # CPU ONLY
+    torch_dtype=torch.float32  # VERY IMPORTANT
 )
-label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
-# Emotion
 emotion_pipeline = pipeline(
     "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
     return_all_scores=True,
-    device=-1
+    device=-1,
+    torch_dtype=torch.float32
 )
 
 # ---------------------------

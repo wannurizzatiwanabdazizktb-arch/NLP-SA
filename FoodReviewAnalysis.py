@@ -22,7 +22,7 @@ from transformers import (
 from stqdm import stqdm
 
 # =========================
-# CACHE MODELS (CRITICAL)
+# CACHE MODELS
 # =========================
 @st.cache_resource(show_spinner="Loading sentiment model...")
 def load_sentiment_model():
@@ -46,7 +46,7 @@ sentiment_pipeline = load_sentiment_model()
 emotion_tokenizer, emotion_model = load_emotion_model()
 
 # =========================
-# HELPERS
+# CONSTANTS & HELPERS
 # =========================
 label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
@@ -60,6 +60,16 @@ emoji_map = {
     "neutral": "😐",
     "disgust": "😒"
 }
+
+def rating_to_sentiment(r):
+    if pd.isna(r):
+        return None
+    if r >= 4:
+        return "positive"
+    elif r == 3:
+        return "neutral"
+    else:
+        return "negative"
 
 def get_emotions(text: str) -> dict:
     inputs = emotion_tokenizer(
@@ -80,25 +90,19 @@ def get_emotions(text: str) -> dict:
         for i in range(len(labels))
     }
 
-def rating_to_sentiment(r):
-    if pd.isna(r):
-        return None
-    if r >= 4:
-        return "positive"
-    elif r == 3:
-        return "neutral"
-    else:
-        return "negative"
+def get_top_emotions(text, top_k=2):
+    emotions = get_emotions(text)
+    return sorted(emotions.items(), key=lambda x: x[1], reverse=True)[:top_k]
 
 # =========================
 # UI
 # =========================
-st.title("🍔 Restaurant Review Sentiment Dashboard")
+st.title("🍔 Restaurant Review Sentiment & Emotion Dashboard")
 
-# =========================
+# =====================================================
 # SINGLE REVIEW
-# =========================
-st.subheader("Single Review Analysis")
+# =====================================================
+st.header("Single Review Analysis")
 
 review = st.text_area("Enter your review")
 rating = st.radio(
@@ -113,21 +117,17 @@ if st.button("Analyze Review"):
         st.warning("Please enter a review.")
         st.stop()
 
-    # ---- Sentiment
     sent = sentiment_pipeline(review)[0]
     sentiment_label = label_map.get(sent["label"], sent["label"])
     sentiment_score = sent["score"]
 
-    # ---- Emotion (MANUAL MODEL ✅)
     emotion_dict = get_emotions(review)
 
-    # ---- Display sentiment
     st.subheader("Sentiment Result")
     st.write(f"**Sentiment:** {sentiment_label}")
     st.write(f"**Confidence:** {sentiment_score:.2f}")
     st.write(f"**Rating Sentiment:** {rating_to_sentiment(rating)}")
 
-    # ---- Emotion chart
     st.subheader("Emotion Breakdown")
 
     df_emotion = pd.DataFrame({
@@ -146,18 +146,14 @@ if st.button("Analyze Review"):
     )
 
     fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-    fig.update_layout(
-        xaxis_title="Confidence (%)",
-        yaxis_title="",
-        xaxis_range=[0, 100]
-    )
+    fig.update_layout(xaxis_range=[0, 100])
 
     st.plotly_chart(fig, use_container_width=True)
 
-# =========================
-# CSV ANALYSIS (SENTIMENT ONLY)
-# =========================
-st.subheader("Batch Review Analysis (CSV)")
+# =====================================================
+# CSV ANALYSIS
+# =====================================================
+st.header("Batch Review Analysis (CSV)")
 
 file = st.file_uploader(
     "Upload CSV with columns: review, rating",
@@ -188,7 +184,7 @@ if file:
         labels, scores = [], []
         BATCH = 16
 
-        with st.spinner("Analyzing reviews…"):
+        with st.spinner("Running sentiment analysis…"):
             for i in stqdm(range(0, len(reviews), BATCH)):
                 batch = reviews[i:i+BATCH]
                 try:
@@ -203,17 +199,87 @@ if file:
         df["predicted_sentiment"] = labels
         df["sentiment_confidence"] = scores
 
+        # ---------------------------
+        # MISMATCHES
+        # ---------------------------
         mismatches = df[df["predicted_sentiment"] != df["rating_sentiment"]]
 
-        st.subheader("Results Summary")
+        pos_mismatch = mismatches[mismatches["predicted_sentiment"] == "positive"]
+        neu_mismatch = mismatches[mismatches["predicted_sentiment"] == "neutral"]
+        neg_mismatch = mismatches[mismatches["predicted_sentiment"] == "negative"]
+
+        st.subheader("Mismatch Summary")
         st.metric("Total Reviews", len(df))
         st.metric("Mismatches", len(mismatches))
 
-        if len(mismatches) > 0:
-            st.warning("⚠️ Mismatched Reviews")
-            st.dataframe(mismatches)
-        else:
-            st.success("✅ No mismatches found")
+        # ---------------------------
+        # EMOTION ANALYSIS (MISMATCH ONLY)
+        # ---------------------------
+        emotion_records = []
 
-        st.subheader("Full Results")
-        st.dataframe(df)
+        with st.spinner("Detecting emotions for mismatches…"):
+            for _, row in stqdm(mismatches.iterrows(), total=len(mismatches)):
+                for emotion, score in get_top_emotions(row["review"], top_k=2):
+                    emotion_records.append({
+                        "Emotion": emotion,
+                        "Sentiment": row["predicted_sentiment"]
+                    })
+
+        df_emotions = pd.DataFrame(emotion_records)
+
+        # ---------------------------
+        # PIE CHART (SENTIMENT)
+        # ---------------------------
+        st.subheader("📊 Sentiment Distribution (Mismatches)")
+
+        sentiment_counts = mismatches["predicted_sentiment"].value_counts().reset_index()
+        sentiment_counts.columns = ["Sentiment", "Count"]
+
+        fig_pie = px.pie(
+            sentiment_counts,
+            names="Sentiment",
+            values="Count",
+            title="Mismatch Sentiment Distribution"
+        )
+
+        st.plotly_chart(fig_pie, use_container_width=True)
+
+        # ---------------------------
+        # BAR CHART (EMOTIONS)
+        # ---------------------------
+        st.subheader("📊 Dominant Emotions (Mismatches)")
+
+        emotion_summary = df_emotions["Emotion"].value_counts().reset_index()
+        emotion_summary.columns = ["Emotion", "Count"]
+
+        emotion_summary["Emotion"] = emotion_summary["Emotion"].apply(
+            lambda x: f"{emoji_map.get(x,'')} {x.capitalize()}"
+        )
+
+        fig_bar = px.bar(
+            emotion_summary,
+            x="Count",
+            y="Emotion",
+            orientation="h",
+            text="Count",
+            color="Count",
+            color_continuous_scale="Viridis"
+        )
+
+        fig_bar.update_traces(textposition="outside")
+
+        st.plotly_chart(fig_bar, use_container_width=True)
+
+        # ---------------------------
+        # DETAILED TABLES
+        # ---------------------------
+        st.subheader("Mismatches by Sentiment")
+
+        with st.expander("Positive Sentiment Mismatches"):
+            st.dataframe(pos_mismatch)
+
+        with st.expander("Neutral Sentiment Mismatches"):
+            st.dataframe(neu_mismatch)
+
+        with st.expander("Negative Sentiment Mismatches"):
+            st.dataframe(neg_mismatch)

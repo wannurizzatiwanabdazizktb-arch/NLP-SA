@@ -27,7 +27,7 @@ label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
 # Emotion
 emotion_pipeline = pipeline(
-    "sentiment-analysis",
+    "text-classification",
     model="j-hartmann/emotion-english-distilroberta-base",
     return_all_scores=True,
     device=-1,
@@ -72,13 +72,7 @@ if st.button("Analyze Review"):
         sentiment_score = sentiment_result['score']
 
         # --- Emotion prediction ---
-        emotion_results = emotion_pipeline(user_review)
-
-        # Normalize output shape
-        if isinstance(emotion_results, list) and isinstance(emotion_results[0], list):
-            emotion_results = emotion_results[0]
-        
-        # Now this ALWAYS works
+        emotion_results = emotion_pipeline(user_review)[0]
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
 
 

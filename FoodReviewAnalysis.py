@@ -74,7 +74,14 @@ if st.button("Analyze Review"):
 
         # --- Emotion prediction ---
         emotion_results = emotion_pipeline(user_review)
+
+        # Normalize output shape
+        if isinstance(emotion_results, list) and isinstance(emotion_results[0], list):
+            emotion_results = emotion_results[0]
+        
+        # Now this ALWAYS works
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
+
 
 
         # --- Map rating to sentiment ---

@@ -1,229 +1,181 @@
-# streamlit_sentiment_dashboard.py
-
+# =========================
+# ENV FIXES (STREAMLIT CLOUD)
+# =========================
 import os
-import streamlit as st
-# 🔥 CRITICAL FIX FOR STREAMLIT CLOUD
 os.environ["TORCH_DISABLE_SDPA"] = "1"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
-os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
+import streamlit as st
 import pandas as pd
-import plotly.express as px
-import torch
-import torch.nn.functional as F
-
-from transformers import (
-    pipeline,
-    AutoTokenizer,
-    AutoModelForSequenceClassification
-)
+from transformers import pipeline
 from stqdm import stqdm
+import plotly.express as px
 
-# ---------------------------
-# 1️⃣ MODELS
-# ---------------------------
-
-# --- Sentiment pipeline (this one is fine) ---
-sentiment_pipeline = pipeline(
-    "sentiment-analysis",
-    model="cardiffnlp/twitter-roberta-base-sentiment-latest",
-    device=-1,
-    truncation=True,
-    max_length=512
-)
-
-label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
-
-# --- Emotion model (DIRECT, NO PIPELINE) ---
-@st.cache_resource
-def load_emotion_model():
-    model_name = "j-hartmann/emotion-english-distilroberta-base"
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModelForSequenceClassification.from_pretrained(model_name)
-    model.eval()
-    return tokenizer, model
-
-emotion_tokenizer, emotion_model = load_emotion_model()
-
-def get_emotions(text: str) -> dict:
-    inputs = emotion_tokenizer(
-        text,
-        return_tensors="pt",
+# =========================
+# CACHE MODELS (CRITICAL)
+# =========================
+@st.cache_resource(show_spinner="Loading sentiment model...")
+def load_sentiment_model():
+    return pipeline(
+        "sentiment-analysis",
+        model="cardiffnlp/twitter-roberta-base-sentiment-latest",
+        device=-1,
         truncation=True,
         max_length=512
     )
 
-    with torch.no_grad():
-        logits = emotion_model(**inputs).logits
-        probs = F.softmax(logits, dim=1)[0]
+@st.cache_resource(show_spinner="Loading emotion model...")
+def load_emotion_model():
+    return pipeline(
+        "text-classification",
+        model="j-hartmann/emotion-english-distilroberta-base",
+        return_all_scores=True,
+        device=-1,
+        truncation=True,
+        max_length=512
+    )
 
-    labels = emotion_model.config.id2label
+sentiment_pipeline = load_sentiment_model()
+emotion_pipeline = load_emotion_model()
 
-    return {
-        labels[i].lower(): probs[i].item()
-        for i in range(len(labels))
-    }
+label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
-# Emoji mapping
 emoji_map = {
     "joy": "😊",
     "anger": "😡",
     "sadness": "😢",
     "fear": "😱",
     "surprise": "😲",
+    "love": "❤️",
     "neutral": "😐",
     "disgust": "😒"
 }
 
-# ---------------------------
-# 2️⃣ STREAMLIT UI
-# ---------------------------
-
+# =========================
+# UI
+# =========================
 st.title("🍔 Restaurant Review Sentiment Dashboard")
-st.write("Analyze sentiment and emotion of reviews, and compare with rating.")
 
-# --- Single Review ---
+# =========================
+# SINGLE REVIEW
+# =========================
 st.subheader("Single Review Analysis")
 
-user_review = st.text_area("Enter your review:")
-
-user_rating = st.radio(
-    "Rate the restaurant:",
-    options=[1, 2, 3, 4, 5],
-    format_func=lambda x: "⭐" * x,
-    horizontal=True
-)
-
-def rating_to_sentiment(rating):
-    if rating >= 4:
-        return "positive"
-    elif rating == 3:
-        return "neutral"
-    else:
-        return "negative"
+review = st.text_area("Enter review text")
+rating = st.radio("Rate the restaurant", [1,2,3,4,5], horizontal=True)
 
 if st.button("Analyze Review"):
-    if user_review.strip():
+    if review.strip() == "":
+        st.warning("Please enter a review.")
+        st.stop()
 
-        # --- Sentiment ---
-        sentiment_result = sentiment_pipeline(user_review)[0]
-        sentiment_label = label_map.get(
-            sentiment_result["label"],
-            sentiment_result["label"]
-        )
-        sentiment_score = sentiment_result["score"]
+    # Sentiment
+    sent = sentiment_pipeline(review)[0]
+    sentiment_label = label_map.get(sent["label"], sent["label"])
+    sentiment_score = sent["score"]
 
-        # --- Emotion (FIXED) ---
-        emotion_dict = get_emotions(user_review)
+    # Emotion (FIXED)
+    emotion_raw = emotion_pipeline(review)
 
-        # --- Rating sentiment ---
-        rating_sentiment = rating_to_sentiment(user_rating)
+    # 🔑 normalize output
+    if isinstance(emotion_raw, list) and isinstance(emotion_raw[0], list):
+        emotion_raw = emotion_raw[0]
 
-        # --- Display ---
-        st.subheader("Sentiment Analysis")
-        st.write(f"**Sentiment:** {sentiment_label}")
-        st.write(f"**Confidence:** {sentiment_score:.2f}")
-        st.write(f"**Rating Sentiment:** {rating_sentiment}")
+    emotion_dict = {
+        e["label"].lower(): float(e["score"])
+        for e in emotion_raw
+    }
 
-        # --- Emotion chart ---
-        st.subheader("Emotion Analysis")
+    # Display
+    st.subheader("Sentiment Result")
+    st.write(f"**Sentiment:** {sentiment_label}")
+    st.write(f"**Confidence:** {sentiment_score:.2f}")
 
-        df_emotion = pd.DataFrame({
-            "Emotion": [
-                f"{emoji_map.get(k, '')} {k.capitalize()}"
-                for k in emotion_dict.keys()
-            ],
-            "Score": [v * 100 for v in emotion_dict.values()]
-        }).sort_values("Score", ascending=True)
+    st.subheader("Emotion Breakdown")
 
-        fig = px.bar(
-            df_emotion,
-            x="Score",
-            y="Emotion",
-            orientation="h",
-            text=df_emotion["Score"].round(1).astype(str) + "%",
-            color="Score",
-            color_continuous_scale="Viridis",
-            title="Emotion Confidence (%)"
-        )
+    df_emotion = pd.DataFrame({
+        "Emotion": [f"{emoji_map.get(k,'')} {k.capitalize()}" for k in emotion_dict],
+        "Score": [v * 100 for v in emotion_dict.values()]
+    }).sort_values("Score")
 
-        fig.update_layout(
-            xaxis_title="Confidence (%)",
-            yaxis_title="",
-            xaxis_range=[0, 100]
-        )
-
-        st.plotly_chart(fig)
-
-        # --- Mismatch check ---
-        st.subheader("Sentiment vs Rating Check")
-
-        if sentiment_label != rating_sentiment:
-            st.warning("⚠️ Mismatch detected!")
-            st.dataframe(pd.DataFrame([{
-                "Review": user_review,
-                "Rating": "⭐" * user_rating,
-                "Rating Sentiment": rating_sentiment,
-                "Predicted Sentiment": sentiment_label,
-                "Confidence": sentiment_score
-            }]))
-        else:
-            st.success("✅ No mismatch detected.")
-
-# ---------------------------
-# 3️⃣ CSV BATCH ANALYSIS
-# ---------------------------
-
-st.subheader("Batch Review Analysis (CSV)")
-uploaded_file = st.file_uploader(
-    "Upload CSV with 'review' and 'rating' columns:",
-    type=["csv"]
-)
-
-if uploaded_file is not None:
-    try:
-        df = pd.read_csv(uploaded_file, encoding="utf-8")
-    except UnicodeDecodeError:
-        df = pd.read_csv(uploaded_file, encoding="latin1")
-
-    st.success(f"CSV loaded successfully ({len(df)} rows)")
-    st.dataframe(df.head())
-
-    df["rating"] = (
-        df["rating"]
-        .astype(str)
-        .str.extract(r"(\d)")
-        .astype(float)
+    fig = px.bar(
+        df_emotion,
+        x="Score",
+        y="Emotion",
+        orientation="h",
+        text="Score",
+        color="Score",
+        color_continuous_scale="Viridis"
     )
+
+    fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
+    fig.update_layout(xaxis_range=[0, 100])
+
+    st.plotly_chart(fig, use_container_width=True)
+
+# =========================
+# CSV ANALYSIS
+# =========================
+st.subheader("Batch Review Analysis (CSV)")
+
+file = st.file_uploader("Upload CSV with columns: review, rating", type=["csv"])
+
+if file:
+    try:
+        df = pd.read_csv(file)
+    except:
+        df = pd.read_csv(file, encoding="latin1")
+
+    if not {"review", "rating"}.issubset(df.columns):
+        st.error("CSV must contain 'review' and 'rating' columns.")
+        st.stop()
+
+    MAX_ROWS = 300
+    if len(df) > MAX_ROWS:
+        st.warning(f"Only first {MAX_ROWS} rows will be analyzed.")
+        df = df.head(MAX_ROWS)
+
+    df["rating"] = df["rating"].astype(str).str.extract(r"(\d)").astype(float)
+
+    def rating_to_sentiment(r):
+        if r >= 4: return "positive"
+        if r == 3: return "neutral"
+        return "negative"
 
     df["rating_sentiment"] = df["rating"].apply(rating_to_sentiment)
 
     if st.button("Analyze CSV Reviews"):
         reviews = df["review"].astype(str).tolist()
-        results = []
 
-        for review in stqdm(reviews, desc="Processing reviews"):
-            if not review.strip():
-                results.append({"label": "NEU", "score": 0.0})
-                continue
+        labels, scores = [], []
+        BATCH = 16
 
-            try:
-                results.append(sentiment_pipeline(review)[0])
-            except Exception:
-                results.append({"label": "NEU", "score": 0.0})
+        with st.spinner("Analyzing reviews…"):
+            for i in stqdm(range(0, len(reviews), BATCH)):
+                batch = reviews[i:i+BATCH]
+                try:
+                    results = sentiment_pipeline(batch)
+                except:
+                    results = [{"label":"NEU","score":0.0}] * len(batch)
 
-        df["predicted_sentiment"] = [
-            label_map.get(r["label"], r["label"]) for r in results
-        ]
-        df["sentiment_confidence"] = [r["score"] for r in results]
+                for r in results:
+                    labels.append(label_map.get(r["label"], r["label"]))
+                    scores.append(r["score"])
+
+        df["predicted_sentiment"] = labels
+        df["sentiment_confidence"] = scores
 
         mismatches = df[df["predicted_sentiment"] != df["rating_sentiment"]]
 
-        if len(mismatches):
-            st.warning(f"⚠️ Found {len(mismatches)} mismatched reviews")
-            st.dataframe(mismatches[
-                ["review", "rating", "rating_sentiment",
-                 "predicted_sentiment", "sentiment_confidence"]
-            ])
+        st.subheader("Results")
+        st.metric("Total Reviews", len(df))
+        st.metric("Mismatches", len(mismatches))
+
+        if len(mismatches) > 0:
+            st.warning("⚠️ Mismatched Reviews")
+            st.dataframe(mismatches)
         else:
-            st.success("✅ No mismatches found!")
+            st.success("✅ No mismatches found")
+
+        st.subheader("Full Output")
+        st.dataframe(df)

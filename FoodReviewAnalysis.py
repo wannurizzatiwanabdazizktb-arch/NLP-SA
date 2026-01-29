@@ -72,7 +72,7 @@ if st.button("Analyze Review"):
         sentiment_score = sentiment_result['score']
 
         # --- Emotion prediction ---
-        emotion_results = emotion_pipeline(user_review)[0]
+        emotion_results = emotion_pipeline(user_review)
         # Ensure list of dicts
         if isinstance(emotion_results, dict):
             emotion_results = [emotion_results]

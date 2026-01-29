@@ -5,11 +5,21 @@ import os
 os.environ["TORCH_DISABLE_SDPA"] = "1"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
 
+# =========================
+# IMPORTS
+# =========================
 import streamlit as st
 import pandas as pd
-from transformers import pipeline
-from stqdm import stqdm
 import plotly.express as px
+import torch
+import torch.nn.functional as F
+
+from transformers import (
+    pipeline,
+    AutoTokenizer,
+    AutoModelForSequenceClassification
+)
+from stqdm import stqdm
 
 # =========================
 # CACHE MODELS (CRITICAL)
@@ -26,18 +36,18 @@ def load_sentiment_model():
 
 @st.cache_resource(show_spinner="Loading emotion model...")
 def load_emotion_model():
-    return pipeline(
-        "text-classification",
-        model="j-hartmann/emotion-english-distilroberta-base",
-        return_all_scores=True,
-        device=-1,
-        truncation=True,
-        max_length=512
-    )
+    model_name = "j-hartmann/emotion-english-distilroberta-base"
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
+    model = AutoModelForSequenceClassification.from_pretrained(model_name)
+    model.eval()
+    return tokenizer, model
 
 sentiment_pipeline = load_sentiment_model()
-emotion_pipeline = load_emotion_model()
+emotion_tokenizer, emotion_model = load_emotion_model()
 
+# =========================
+# HELPERS
+# =========================
 label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
 emoji_map = {
@@ -51,6 +61,35 @@ emoji_map = {
     "disgust": "😒"
 }
 
+def get_emotions(text: str) -> dict:
+    inputs = emotion_tokenizer(
+        text,
+        return_tensors="pt",
+        truncation=True,
+        max_length=512
+    )
+
+    with torch.no_grad():
+        logits = emotion_model(**inputs).logits
+        probs = F.softmax(logits, dim=1)[0]
+
+    labels = emotion_model.config.id2label
+
+    return {
+        labels[i].lower(): probs[i].item()
+        for i in range(len(labels))
+    }
+
+def rating_to_sentiment(r):
+    if pd.isna(r):
+        return None
+    if r >= 4:
+        return "positive"
+    elif r == 3:
+        return "neutral"
+    else:
+        return "negative"
+
 # =========================
 # UI
 # =========================
@@ -61,36 +100,34 @@ st.title("🍔 Restaurant Review Sentiment Dashboard")
 # =========================
 st.subheader("Single Review Analysis")
 
-review = st.text_area("Enter review text")
-rating = st.radio("Rate the restaurant", [1,2,3,4,5], horizontal=True)
+review = st.text_area("Enter your review")
+rating = st.radio(
+    "Rate the restaurant",
+    [1, 2, 3, 4, 5],
+    format_func=lambda x: "⭐" * x,
+    horizontal=True
+)
 
 if st.button("Analyze Review"):
     if review.strip() == "":
         st.warning("Please enter a review.")
         st.stop()
 
-    # Sentiment
+    # ---- Sentiment
     sent = sentiment_pipeline(review)[0]
     sentiment_label = label_map.get(sent["label"], sent["label"])
     sentiment_score = sent["score"]
 
-    # Emotion (FIXED)
-    emotion_raw = emotion_pipeline(review)
+    # ---- Emotion (MANUAL MODEL ✅)
+    emotion_dict = get_emotions(review)
 
-    # 🔑 normalize output
-    if isinstance(emotion_raw, list) and isinstance(emotion_raw[0], list):
-        emotion_raw = emotion_raw[0]
-
-    emotion_dict = {
-        e["label"].lower(): float(e["score"])
-        for e in emotion_raw
-    }
-
-    # Display
+    # ---- Display sentiment
     st.subheader("Sentiment Result")
     st.write(f"**Sentiment:** {sentiment_label}")
     st.write(f"**Confidence:** {sentiment_score:.2f}")
+    st.write(f"**Rating Sentiment:** {rating_to_sentiment(rating)}")
 
+    # ---- Emotion chart
     st.subheader("Emotion Breakdown")
 
     df_emotion = pd.DataFrame({
@@ -109,16 +146,23 @@ if st.button("Analyze Review"):
     )
 
     fig.update_traces(texttemplate="%{text:.1f}%", textposition="outside")
-    fig.update_layout(xaxis_range=[0, 100])
+    fig.update_layout(
+        xaxis_title="Confidence (%)",
+        yaxis_title="",
+        xaxis_range=[0, 100]
+    )
 
     st.plotly_chart(fig, use_container_width=True)
 
 # =========================
-# CSV ANALYSIS
+# CSV ANALYSIS (SENTIMENT ONLY)
 # =========================
 st.subheader("Batch Review Analysis (CSV)")
 
-file = st.file_uploader("Upload CSV with columns: review, rating", type=["csv"])
+file = st.file_uploader(
+    "Upload CSV with columns: review, rating",
+    type=["csv"]
+)
 
 if file:
     try:
@@ -136,12 +180,6 @@ if file:
         df = df.head(MAX_ROWS)
 
     df["rating"] = df["rating"].astype(str).str.extract(r"(\d)").astype(float)
-
-    def rating_to_sentiment(r):
-        if r >= 4: return "positive"
-        if r == 3: return "neutral"
-        return "negative"
-
     df["rating_sentiment"] = df["rating"].apply(rating_to_sentiment)
 
     if st.button("Analyze CSV Reviews"):
@@ -156,7 +194,7 @@ if file:
                 try:
                     results = sentiment_pipeline(batch)
                 except:
-                    results = [{"label":"NEU","score":0.0}] * len(batch)
+                    results = [{"label": "NEU", "score": 0.0}] * len(batch)
 
                 for r in results:
                     labels.append(label_map.get(r["label"], r["label"]))
@@ -167,7 +205,7 @@ if file:
 
         mismatches = df[df["predicted_sentiment"] != df["rating_sentiment"]]
 
-        st.subheader("Results")
+        st.subheader("Results Summary")
         st.metric("Total Reviews", len(df))
         st.metric("Mismatches", len(mismatches))
 
@@ -177,5 +215,5 @@ if file:
         else:
             st.success("✅ No mismatches found")
 
-        st.subheader("Full Output")
+        st.subheader("Full Results")
         st.dataframe(df)

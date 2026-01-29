@@ -4,6 +4,7 @@ import os
 # 🔥 CRITICAL FIX FOR STREAMLIT CLOUD
 os.environ["TORCH_DISABLE_SDPA"] = "1"
 os.environ["PYTORCH_ENABLE_MPS_FALLBACK"] = "1"
+os.environ["HF_TOKEN"] = st.secrets["HF_TOKEN"]
 
 import streamlit as st
 import pandas as pd

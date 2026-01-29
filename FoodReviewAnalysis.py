@@ -66,7 +66,8 @@ def rating_to_sentiment(r):
     else:
         return "negative"
 
-def get_dominant_emotion(text: str) -> str:
+# --- For single review: return all emotion scores ---
+def get_all_emotions(text: str) -> dict:
     inputs = emotion_tokenizer(
         text,
         return_tensors="pt",
@@ -76,9 +77,14 @@ def get_dominant_emotion(text: str) -> str:
     with torch.no_grad():
         logits = emotion_model(**inputs).logits
         probs = F.softmax(logits, dim=1)[0]
+
     labels = emotion_model.config.id2label
-    top_idx = torch.argmax(probs).item()
-    return labels[top_idx].lower()
+    return {labels[i].lower(): probs[i].item() for i in range(len(labels))}
+
+# --- For CSV: return only dominant emotion ---
+def get_dominant_emotion(text: str) -> str:
+    emotions = get_all_emotions(text)
+    return max(emotions, key=emotions.get)
 
 # =========================
 # STREAMLIT UI
@@ -108,8 +114,8 @@ if st.button("Analyze Single Review"):
     sentiment_label = label_map.get(sent["label"], sent["label"])
     sentiment_score = sent["score"]
 
-    # Emotions
-    emotion_dict = get_emotions = {k.lower(): v for k, v in get_emotions_single(review).items()} if 'get_emotions_single' in locals() else {get_dominant_emotion(review): 1.0}
+    # All emotions
+    emotion_dict = get_all_emotions(review)
 
     st.subheader("Sentiment Result")
     st.write(f"**Sentiment:** {sentiment_label}")
@@ -118,7 +124,7 @@ if st.button("Analyze Single Review"):
 
     st.subheader("Emotion Breakdown")
     df_emotion = pd.DataFrame({
-        "Emotion": [f"{emoji_map.get(k,'')} {k.capitalize()}" for k in emotion_dict],
+        "Emotion": [f"{emoji_map.get(k,'')} {k.capitalize()}" for k in emotion_dict.keys()],
         "Score": [v * 100 for v in emotion_dict.values()]
     }).sort_values("Score")
 

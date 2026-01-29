@@ -42,7 +42,6 @@ emoji_map = {
     "sadness": "😢",
     "fear": "😱",
     "surprise": "😲",
-    "love": "❤️",
     "neutral": "😐",
     "disgust": "😒"
 }
@@ -112,7 +111,9 @@ if st.button("Analyze Review"):
         
         # Sort for better visual
         df_emotion = df_emotion.sort_values("Score", ascending=True)
-        
+
+        st.write("Emotion dict:", emotion_dict)
+
         # Plot colorful horizontal bar chart
         fig = px.bar(
             df_emotion,

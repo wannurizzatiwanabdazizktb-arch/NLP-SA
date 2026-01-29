@@ -73,8 +73,9 @@ if st.button("Analyze Review"):
         sentiment_score = sentiment_result['score']
 
         # --- Emotion prediction ---
-        emotion_results = emotion_pipeline(user_review)[0]
+        emotion_results = emotion_pipeline(user_review)
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
+
 
         # --- Map rating to sentiment ---
         def rating_to_sentiment(rating):

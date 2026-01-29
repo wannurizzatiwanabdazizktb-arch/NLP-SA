@@ -200,9 +200,23 @@ if file:
 
         st.subheader("📌 Summary")
         c1, c2, c3 = st.columns(3)
-        c1.metric("Total Reviews", len(df))
-        c2.metric("Mismatches", len(mismatches))
-        c3.metric("Mismatch Rate", f"{(len(mismatches)/len(df))*100:.1f}%")
+        c1.metric(
+            label="Total Reviews ℹ️",
+            value=len(df),
+            help="The total number of reviews in your uploaded CSV"
+        )
+        
+        c2.metric(
+            label="Mismatches ⚠️",
+            value=len(mismatches),
+            help="Number of reviews where predicted sentiment does not match rating sentiment"
+        )
+        
+        c3.metric(
+            label="Mismatch Rate (%)",
+            value=f"{(len(mismatches)/len(df))*100:.1f}%",
+            help="Percentage of reviews with mismatched sentiment"
+        )
 
         # =========================
         # OVERALL CHARTS

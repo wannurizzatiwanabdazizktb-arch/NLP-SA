@@ -27,7 +27,7 @@ label_map = {"POS": "positive", "NEU": "neutral", "NEG": "negative"}
 
 # Emotion
 emotion_pipeline = pipeline(
-    "text-classification",
+    "sentiment-analysis",
     model="j-hartmann/emotion-english-distilroberta-base",
     return_all_scores=True,
     device=-1,

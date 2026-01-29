@@ -73,6 +73,13 @@ if st.button("Analyze Review"):
 
         # --- Emotion prediction ---
         emotion_results = emotion_pipeline(user_review)[0]
+        # Ensure list of dicts
+        if isinstance(emotion_results, dict):
+            emotion_results = [emotion_results]
+        
+        if isinstance(emotion_results, list) and emotion_results and isinstance(emotion_results[0], list):
+            emotion_results = emotion_results[0]
+
         emotion_dict = {e['label'].lower(): e['score'] for e in emotion_results}
 
 
